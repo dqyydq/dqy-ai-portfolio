@@ -12,6 +12,9 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 60
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    deepseek_base_url: str = "https://api.deepseek.com/v1"
+    deepseek_model: str = "deepseek-v4-flash"
+    llm_timeout_seconds: float = 30
 
 
 @lru_cache

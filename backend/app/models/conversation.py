@@ -1,12 +1,12 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, String,ForeignKey,Enum
-from sqlalchemy.orm import Mapped, mapped_column,relationship
+from enum import Enum
+from sqlalchemy import DateTime, Enum as SqlEnum, ForeignKey, String, Text
+from sqlalchemy.orm import Mapped, mapped_column
 import uuid
 from datetime import datetime, timezone
 from app.db.base import Base
-from models.user import User
-from typing import Text
+
 
 class MessageRole(str, Enum):
     USER = "user"
@@ -25,8 +25,17 @@ class Message(Base):
     __tablename__ = "messages"
     id:Mapped[uuid.UUID]=mapped_column(primary_key=True,default=uuid.uuid4)
     conversation_id:Mapped[uuid.UUID]=mapped_column(ForeignKey("conversations.id"),nullable=False)
-    role:Mapped[MessageRole]=mapped_column(Enum(MessageRole,name="message_role"),nullable=False)
-    content:Mapped[Text]=mapped_column(nullable=False)
+    role: Mapped[MessageRole] = mapped_column(
+    SqlEnum(
+        MessageRole,
+        name="message_role",
+        values_callable=lambda enum_cls: [
+            member.value for member in enum_cls
+        ],
+    ),
+    nullable=False,
+)
+    content:Mapped[str]=mapped_column(Text,nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True),default=lambda: datetime.now(timezone.utc),nullable=False)
 
 

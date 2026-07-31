@@ -12,6 +12,10 @@ from app.core.security import ALGORITHM
 from app.db.database import get_session
 from app.models.user import User
 
+from fastapi import Request
+
+from app.clients.llm_client import LLMClient
+
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
@@ -46,3 +50,7 @@ async def get_current_user(
         raise credentials_exception
 
     return user
+
+
+def get_llm_client(request: Request) -> LLMClient:
+    return request.app.state.llm_client

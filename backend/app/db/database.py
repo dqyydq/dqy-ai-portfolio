@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async
 from app.core.config import get_settings
 from app.db.base import Base
 from app.models.user import User  # 只为触发模型注册
+from app.models.conversation import Conversation, Message
 
 settings = get_settings()
 engine: AsyncEngine = create_async_engine(settings.database_url, pool_pre_ping=True)

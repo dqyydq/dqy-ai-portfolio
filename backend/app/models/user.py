@@ -3,10 +3,9 @@ import uuid
 from datetime import datetime, timezone
 
 from sqlalchemy import DateTime, String
-from sqlalchemy.orm import Mapped, mapped_column,relationship
+from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
-from models.conversation import Conversation
 
 class User(Base):
     __tablename__ = "users"

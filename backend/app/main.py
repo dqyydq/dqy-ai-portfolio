@@ -10,6 +10,7 @@ from app.clients.llm_client import LLMClient
 from app.core.config import get_settings
 from app.db.database import close_database, init_db
 from app.db.redis import create_redis_client
+from app.clients.cached_llm_client import CachedLLMClient
 
 
 @asynccontextmanager
@@ -24,11 +25,19 @@ async def lifespan(app: FastAPI):
         base_url=settings.deepseek_base_url,
         timeout=settings.llm_timeout_seconds,
     )
-    app.state.llm_client = LLMClient(
+
+    base_llm_client = LLMClient(
         client=openai_client,
         settings=settings,
     )
+
     redis_client = create_redis_client()
+
+    app.state.llm_client = CachedLLMClient(
+        llm_client=base_llm_client,
+        redis_client=redis_client,
+        model=settings.deepseek_model,
+    )
     app.state.redis_client = redis_client
 
     try:

@@ -27,13 +27,13 @@ class FakeLLMClient:
         self.answer = answer
         self.histories = []
 
-    async def generate(self, history):
+    async def generate(self, history, cache_scope: str | None = None):
         self.histories.append(history)
         return self.answer
 
 
 class FailingLLMClient:
-    async def generate(self, history):
+    async def generate(self, history, cache_scope: str | None = None):
         raise LLMCallError("LLM request failed")
 
 

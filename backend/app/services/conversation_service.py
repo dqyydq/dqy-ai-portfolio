@@ -154,7 +154,10 @@ async def send_message_and_generate(
             current_message=user_message,
         )
 
-    assistant_content = await llm_client.generate(history)
+    assistant_content = await llm_client.generate(
+    history,
+    cache_scope=f"conversation:{conversation_id}",
+    )
 
     assistant_message = await create_assistant_message(
         session=session,

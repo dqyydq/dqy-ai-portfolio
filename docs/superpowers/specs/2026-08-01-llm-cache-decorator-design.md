@@ -9,7 +9,7 @@ Add exact-match Redis response caching without coupling the provider-facing `LLM
 - `LLMClient`: remains responsible only for calling the configured OpenAI-compatible provider and validating its response.
 - `llm_cache_service`: builds deterministic keys and reads/writes text responses with a one-hour TTL.
 - `CachedLLMClient`: wraps one `LLMClient` and one Redis client. It owns cache-aside orchestration.
-- Conversation flow: explicitly calls `CachedLLMClient.generate(messages, cache_scope="conversation")`.
+- Conversation flow: explicitly calls `CachedLLMClient.generate(messages, cache_scope=f"conversation:{conversation_id}")`.
 
 ## Data flow
 
@@ -23,7 +23,7 @@ Add exact-match Redis response caching without coupling the provider-facing `LLM
 
 - Redis read or write errors are logged and treated as a cache miss; the provider call continues.
 - Provider failures propagate as the existing LLM errors and are never cached.
-- Cache scope is part of both the Redis key prefix/payload so conversation, summary, and future Agent flows cannot accidentally reuse one another's responses.
+- Cache scope is part of both the Redis key prefix/payload. The conversation scope includes `conversation_id`, so even identical requests from separate conversation threads never share a response.
 
 ## Tests
 

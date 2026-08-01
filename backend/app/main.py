@@ -9,7 +9,7 @@ from app.api.health import router as health_router
 from app.clients.llm_client import LLMClient
 from app.core.config import get_settings
 from app.db.database import close_database, init_db
-from app.db.redis import close_redis
+from app.db.redis import create_redis_client
 
 
 @asynccontextmanager
@@ -28,15 +28,16 @@ async def lifespan(app: FastAPI):
         client=openai_client,
         settings=settings,
     )
-
-    await init_db()
+    redis_client = create_redis_client()
+    app.state.redis_client = redis_client
 
     try:
+        await init_db()
         yield
     finally:
         await openai_client.close()
         await close_database()
-        await close_redis()
+        await redis_client.aclose()
 
 
 app = FastAPI(

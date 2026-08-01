@@ -1,4 +1,9 @@
+import logging
+
 from openai import APIError
+
+
+logger = logging.getLogger(__name__)
 
 class LLMResponseError(Exception):
     pass
@@ -13,15 +18,20 @@ class LLMClient:
 
     async def generate(self, history) -> str:
         try:
-            response = await self._client.responses.create(
+            response = await self._client.chat.completions.create(
                 model=self._settings.deepseek_model,
-                input=history,
+                messages=history,
                 timeout=self._settings.llm_timeout_seconds,
             )
         except APIError as exc:
+            logger.warning(
+                "DeepSeek request failed (status=%s): %s",
+                getattr(exc, "status_code", None),
+                exc,
+            )
             raise LLMCallError("LLM request failed") from exc
 
-        text = response.output_text.strip()
+        text = (response.choices[0].message.content or "").strip()
         if not text:
             raise LLMResponseError("LLM returned empty output")
         return text

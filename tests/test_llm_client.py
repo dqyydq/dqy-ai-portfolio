@@ -8,36 +8,38 @@ from app.clients.llm_client import LLMCallError, LLMClient, LLMResponseError
 from app.core.config import Settings
 
 
-class FakeResponses:
+class FakeChatCompletions:
     def __init__(self, output_text: str = "mock answer") -> None:
         self.kwargs = None
         self.output_text = output_text
 
     async def create(self, **kwargs):
         self.kwargs = kwargs
-        return SimpleNamespace(output_text=self.output_text)
+        return SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content=self.output_text))],
+        )
 
 
 class FakeClient:
     def __init__(self, output_text: str = "mock answer") -> None:
-        self.responses = FakeResponses(output_text)
+        self.chat = SimpleNamespace(completions=FakeChatCompletions(output_text))
 
 
-class FailingResponses:
+class FailingChatCompletions:
     async def create(self, **kwargs):
         raise APIError(
             "upstream failed",
-            request=Request("POST", "https://api.deepseek.com/v1/responses"),
+            request=Request("POST", "https://api.deepseek.com/chat/completions"),
             body=None,
         )
 
 
 class FailingClient:
-    responses = FailingResponses()
+    chat = SimpleNamespace(completions=FailingChatCompletions())
 
 
 @pytest.mark.asyncio
-async def test_generate_returns_output_text_and_uses_settings():
+async def test_generate_returns_chat_completion_text_and_uses_settings():
     settings = Settings(
         deepseek_api_key="test-key-not-used",
         deepseek_model="test-model",
@@ -48,16 +50,16 @@ async def test_generate_returns_output_text_and_uses_settings():
     history = [
         {
             "role": "user",
-            "content": [{"type": "input_text", "text": "hello"}],
+            "content": "hello",
         }
     ]
 
     answer = await llm_client.generate(history)
 
     assert answer == "mock answer"
-    assert fake_client.responses.kwargs == {
+    assert fake_client.chat.completions.kwargs == {
         "model": "test-model",
-        "input": history,
+        "messages": history,
         "timeout": 12.5,
     }
 

@@ -15,6 +15,7 @@ from app.models.user import User
 from fastapi import Request
 
 from app.clients.llm_client import LLMClient
+from redis.asyncio import Redis
 
 
 bearer_scheme = HTTPBearer(auto_error=False)
@@ -54,3 +55,7 @@ async def get_current_user(
 
 def get_llm_client(request: Request) -> LLMClient:
     return request.app.state.llm_client
+
+
+def get_redis_client(request: Request) -> Redis:
+    return request.app.state.redis_client

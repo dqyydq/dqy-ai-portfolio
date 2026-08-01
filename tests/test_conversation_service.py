@@ -1,6 +1,7 @@
 import uuid
 
 import pytest
+from redis.exceptions import ConnectionError as RedisConnectionError
 from sqlalchemy import delete
 
 from app.clients.llm_client import LLMCallError
@@ -36,7 +37,15 @@ class FailingLLMClient:
         raise LLMCallError("LLM request failed")
 
 
-def test_build_llm_history_preserves_order_and_response_types() -> None:
+class UnavailableRedis:
+    async def lrange(self, *_args, **_kwargs):
+        raise RedisConnectionError("Redis is unavailable")
+
+    def pipeline(self, *_args, **_kwargs):
+        raise RedisConnectionError("Redis is unavailable")
+
+
+def test_build_llm_history_preserves_order_for_chat_completions() -> None:
     conversation_id = uuid.uuid4()
     messages = [
         Message(
@@ -56,11 +65,11 @@ def test_build_llm_history_preserves_order_and_response_types() -> None:
     assert history == [
         {
             "role": "user",
-            "content": [{"type": "input_text", "text": "First question"}],
+            "content": "First question",
         },
         {
             "role": "assistant",
-            "content": [{"type": "output_text", "text": "First answer"}],
+            "content": "First answer",
         },
     ]
 
@@ -263,7 +272,7 @@ async def test_send_message_and_generate_persists_user_and_assistant() -> None:
             [
                 {
                     "role": "user",
-                    "content": [{"type": "input_text", "text": "Tell me a fact"}],
+                    "content": "Tell me a fact",
                 }
             ]
         ]
@@ -274,6 +283,67 @@ async def test_send_message_and_generate_persists_user_and_assistant() -> None:
         assert [(message.role, message.content) for message in messages] == [
             (MessageRole.USER, "Tell me a fact"),
             (MessageRole.ASSISTANT, "Generated answer"),
+        ]
+    finally:
+        async with session_factory() as session:
+            if conversation_id is not None:
+                await session.execute(
+                    delete(Message).where(Message.conversation_id == conversation_id),
+                )
+                await session.execute(
+                    delete(Conversation).where(Conversation.id == conversation_id),
+                )
+            if user_id is not None:
+                await session.execute(delete(User).where(User.id == user_id))
+            await session.commit()
+        await close_database()
+
+
+async def test_send_message_and_generate_falls_back_to_postgres_when_redis_fails() -> None:
+    email = f"redis-fallback-{uuid.uuid4()}@example.com"
+    user_id = None
+    conversation_id = None
+    llm_client = FakeLLMClient()
+
+    await init_db()
+    try:
+        async with session_factory() as session:
+            user = await create_user(
+                session,
+                RegisterRequest(
+                    email=email,
+                    user_name=f"user_{uuid.uuid4().hex[:12]}",
+                    password="correct horse battery staple",
+                ),
+            )
+            user_id = user.id
+            conversation = await create_conversation(
+                session,
+                user_id=user_id,
+                data=ConversationCreate(title="Redis fallback conversation"),
+            )
+            conversation_id = conversation.id
+
+            assistant = await send_message_and_generate(
+                session=session,
+                user_id=user_id,
+                conversation_id=conversation_id,
+                data=MessageCreate(content="Redis can fail safely"),
+                llm_client=llm_client,
+                redis_client=UnavailableRedis(),
+            )
+
+        assert assistant.content == "Mock assistant reply"
+        assert llm_client.histories == [
+            [{"role": "user", "content": "Redis can fail safely"}],
+        ]
+
+        async with session_factory() as session:
+            messages = await list_messages(session, conversation_id)
+
+        assert [message.role for message in messages] == [
+            MessageRole.USER,
+            MessageRole.ASSISTANT,
         ]
     finally:
         async with session_factory() as session:

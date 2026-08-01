@@ -6,7 +6,16 @@ from uuid import UUID
 from sqlalchemy import select
 from app.api.conversation_schemas import MessageCreate
 from app.models.conversation import MessageRole
+import logging
+logger = logging.getLogger(__name__)
+from redis.exceptions import RedisError
+from redis.asyncio import Redis
 
+from app.services.memory_service import (
+    MEMORY_WINDOW_SIZE,
+    append_memory_message,
+    get_memory_messages,
+)
 
 
 class ConversationNotFoundError(Exception):
@@ -106,28 +115,10 @@ async def list_messages(
 
 
 def build_llm_history(messages: list[Message]) -> list[dict]:
-
-    history=[]
-
-    for message in messages:
-        content_type=(
-            "input_text"
-            if message.role==MessageRole.USER else
-            "output_text"
-        )
-        history.append(
-            {
-                "role":message.role.value,
-                "content":[
-                    {
-                        "type":content_type,
-                        "text":message.content
-                    }
-                ],
-            }
-        )
-    return history
-
+    return [
+        {"role": message.role.value, "content": message.content}
+        for message in messages
+    ]
 
 async def send_message_and_generate(
     session: AsyncSession,
@@ -135,27 +126,125 @@ async def send_message_and_generate(
     conversation_id: UUID,
     data: MessageCreate,
     llm_client,
+    redis_client: Redis | None = None,
 ) -> Message:
-    conversation=await get_conversation_for_user(session,conversation_id,user_id)
+    conversation = await get_conversation_for_user(
+        session,
+        conversation_id,
+        user_id,
+    )
     if conversation is None:
         raise ConversationNotFoundError("Conversation not found")
 
-    await create_user_message(
+    user_message = await create_user_message(
         session=session,
         conversation_id=conversation_id,
-        data=data
+        data=data,
     )
 
-    messages = await list_messages(
-    session=session,
-    conversation_id=conversation_id,
-    )
+    if redis_client is None:
+        history = build_llm_history(
+            await list_recent_messages(session, conversation_id, MEMORY_WINDOW_SIZE),
+        )
+    else:
+        history = await get_llm_history_with_memory(
+            session=session,
+            redis_client=redis_client,
+            conversation_id=conversation_id,
+            current_message=user_message,
+        )
 
-    history = build_llm_history(messages)
     assistant_content = await llm_client.generate(history)
 
-    return await create_assistant_message(
-    session=session,
-    conversation_id=conversation_id,
-    content=assistant_content,
-)
+    assistant_message = await create_assistant_message(
+        session=session,
+        conversation_id=conversation_id,
+        content=assistant_content,
+    )
+
+    if redis_client is not None:
+        try:
+            await append_memory_message(
+                redis_client=redis_client,
+                conversation_id=conversation_id,
+                role=assistant_message.role,
+                content=assistant_message.content,
+            )
+        except RedisError:
+            logger.warning(
+                "Redis memory write failed after assistant response",
+                exc_info=True,
+            )
+
+    return assistant_message
+
+async def list_recent_messages(
+        session:AsyncSession,
+        conversation_id:UUID,
+        limit:int
+)->list[Message]:
+    result= await session.execute(
+        select(Message)
+        .where(Message.conversation_id==conversation_id)
+        .order_by(Message.created_at.desc())
+        .limit(limit)
+    )
+    messages=list(result.scalars().all())
+    messages.reverse()
+    return messages
+
+
+async def get_llm_history_with_memory(
+        session:AsyncSession,
+        redis_client: Redis,
+        conversation_id:UUID,
+        current_message:Message
+)->list[dict[str,str]]:
+    try:
+        cache_history=await get_memory_messages(redis_client, conversation_id)
+
+        if cache_history:
+            await append_memory_message(
+                redis_client=redis_client,
+                conversation_id=conversation_id,
+                role=current_message.role,
+                content=current_message.content,
+            )
+
+            current_item={
+                "role":current_message.role.value,
+                "content":current_message.content
+            }
+            return [
+                *cache_history,
+                current_item,
+            ][-MEMORY_WINDOW_SIZE:]
+
+        recent_messages = await list_recent_messages(
+            session=session,
+            conversation_id=conversation_id,
+            limit=MEMORY_WINDOW_SIZE,
+        )
+
+        for message in recent_messages:
+            await append_memory_message(
+                redis_client=redis_client,
+                conversation_id=conversation_id,
+                role=message.role,
+                content=message.content,
+            )
+
+        return build_llm_history(recent_messages)
+    except RedisError:
+        logger.warning(
+            "Redis memory is unavailable; falling back to PostgreSQL",
+            exc_info=True,
+        )
+
+        recent_messages = await list_recent_messages(
+            session=session,
+            conversation_id=conversation_id,
+            limit=MEMORY_WINDOW_SIZE,
+        )
+
+        return build_llm_history(recent_messages)

@@ -15,7 +15,7 @@ async def test_readiness_returns_503_when_dependency_is_down(monkeypatch) -> Non
     async def database_down() -> bool:
         return False
 
-    async def redis_up() -> bool:
+    async def redis_up(_redis_client) -> bool:
         return True
 
     monkeypatch.setattr(health_api, "check_database", database_down)

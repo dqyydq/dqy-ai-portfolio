@@ -1,5 +1,9 @@
-from fastapi import APIRouter, HTTPException, status
+from typing import Annotated
 
+from fastapi import APIRouter, Depends, HTTPException, status
+from redis.asyncio import Redis
+
+from app.api.deps import get_redis_client
 from app.db.database import check_database
 from app.db.redis import check_redis
 
@@ -12,12 +16,13 @@ async def health() -> dict[str, str]:
 
 
 @router.get("/health/ready")
-async def readiness() -> dict[str, str]:
-    database_ok, redis_ok = await check_database(), await check_redis()
+async def readiness(
+    redis_client: Annotated[Redis, Depends(get_redis_client)],
+) -> dict[str, str]:
+    database_ok, redis_ok = await check_database(), await check_redis(redis_client)
     if not (database_ok and redis_ok):
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail={"database": database_ok, "redis": redis_ok},
         )
     return {"status": "ready", "database": "ok", "redis": "ok"}
-

@@ -1,7 +1,8 @@
 .venv/
 .uv-cache/
 .env
+output/
+.playwright-cli/
 __pycache__/
 .pytest_cache/
 *.py[cod]
-

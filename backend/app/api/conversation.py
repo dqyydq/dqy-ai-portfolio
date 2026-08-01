@@ -7,7 +7,8 @@ from app.api.conversation_schemas import (
     ConversationCreate,
     ConversationResponse,
 )
-from app.api.deps import get_current_user, get_llm_client
+from app.api.deps import get_current_user, get_llm_client, get_redis_client
+from redis.asyncio import Redis
 from app.db.database import get_session
 from app.models.user import User
 
@@ -99,6 +100,7 @@ async def create_message(
     current_user: Annotated[User, Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_session)],
     llm_client: Annotated[LLMClient, Depends(get_llm_client)],
+    redis_client: Annotated[Redis, Depends(get_redis_client)],
 ) -> MessageResponse:
     try:
         return await send_message_and_generate(
@@ -107,6 +109,7 @@ async def create_message(
             conversation_id=conversation_id,
             data=data,
             llm_client=llm_client,
+            redis_client=redis_client,
         )
     except ConversationNotFoundError:
         raise HTTPException(

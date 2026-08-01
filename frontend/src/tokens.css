@@ -1,0 +1,53 @@
+/* Hallmark 路 pre-emit critique: P5 H5 E4 S5 R5 V4 */
+/* Hallmark 路 genre: modern-minimal 路 macrostructure: Workbench 路 theme: Cobalt 路 enrichment: none 路 nav: application-sidebar 路 footer: none */
+:root {
+  --color-paper: oklch(98.8% 0.004 240);
+  --color-paper-raised: oklch(100% 0 0);
+  --color-paper-muted: oklch(95.8% 0.008 240);
+  --color-ink: oklch(22% 0.02 238);
+  --color-ink-soft: oklch(38% 0.018 238);
+  --color-muted: oklch(52% 0.014 238);
+  --color-rule: oklch(89% 0.01 240);
+  --color-rule-strong: oklch(81% 0.016 240);
+  --color-accent: oklch(31% 0.065 168);
+  --color-accent-ink: oklch(100% 0 0);
+  --color-accent-soft: oklch(94% 0.022 168);
+  --color-focus: oklch(46% 0.12 238);
+  --color-user: oklch(94% 0.016 238);
+  --color-error: oklch(52% 0.18 28);
+  --color-success: oklch(49% 0.12 158);
+  --color-shadow-soft: oklch(21% 0.02 238 / 0.04);
+  --color-on-accent-rule: oklch(100% 0 0 / 0.22);
+  --color-on-accent-veil: oklch(100% 0 0 / 0.06);
+  --color-on-accent-veil-strong: oklch(100% 0 0 / 0.05);
+  --font-display: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Segoe UI", system-ui, sans-serif;
+  --font-mono: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.25rem;
+  --text-xl: 1.5rem;
+  --text-2xl: clamp(2rem, 4vw, 3.25rem);
+  --radius-sm: 0.5rem;
+  --radius-md: 0.875rem;
+  --radius-lg: 1.25rem;
+  --rule: 1px solid var(--color-rule);
+  --shadow-panel: 0 16px 48px oklch(21% 0.02 238 / 0.08);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in: cubic-bezier(0.7, 0, 0.84, 0);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-fast: 140ms;
+  --dur-base: 220ms;
+}
+
+/* Hallmark: genre modern-minimal; tone calm developer workbench; anchor forest ink; macrostructure Workbench; contrast pass (40-41); nav application-sidebar; footer none; slop pass (42-45); honest pass (46); chrome pass (47); tokens pass (48); responsive pass (34,49-57); icons pass (30). */

@@ -1,18 +1,17 @@
 from app.models.conversation import Conversation,Message
 from app.core.security import get_password_hash,verify_password
-from app.api.conversation_schemas import ConversationCreate, ConversationLearningContextUpdate, ConversationResponse
+from app.api.conversation_schemas import ConversationCreate
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
 from sqlalchemy import select
 from app.api.conversation_schemas import MessageCreate
-from app.models.conversation import ConversationMode, MessageRole
+from app.models.conversation import MessageRole
 import logging
 logger = logging.getLogger(__name__)
 from redis.exceptions import RedisError
 from redis.asyncio import Redis
 from collections.abc import AsyncIterator
 from app.clients.llm_client import LLMCallError
-from app.realtime.events import RealtimeEvent, RealtimeEventType
 from app.services.memory_service import (
     MEMORY_WINDOW_SIZE,
     append_memory_message,
@@ -31,8 +30,6 @@ async def create_conversation(
     conversation=Conversation(
         user_id=user_id,
         title=data.title,
-        mode=data.mode,
-        learning_day=data.learning_day,
     )
 
     session.add(conversation)
@@ -67,19 +64,6 @@ async def get_conversation_for_user(
 )
     return result.scalar_one_or_none()
 
-
-async def update_project_interview_learning_day(
-    session: AsyncSession,
-    conversation: Conversation,
-    data: ConversationLearningContextUpdate,
-) -> Conversation:
-    if conversation.mode is not ConversationMode.PROJECT_INTERVIEW:
-        raise ValueError("Conversation is not a project interview")
-
-    conversation.learning_day = data.learning_day
-    await session.commit()
-    await session.refresh(conversation)
-    return conversation
 
 
 
@@ -188,19 +172,7 @@ async def send_message_and_generate(
             current_message=user_message,
         )
 
-    if (
-        conversation.mode is ConversationMode.PROJECT_INTERVIEW
-        and conversation.learning_day is not None
-    ):
-        history = [
-            build_project_interview_instruction(conversation.learning_day),
-            *history,
-        ]
-
-    assistant_content = await llm_client.generate(
-    history,
-    cache_scope=f"conversation:{conversation_id}",
-    )
+    assistant_content = await llm_client.generate(history)
 
     assistant_message = await create_assistant_message(
         session=session,
@@ -295,106 +267,3 @@ async def get_llm_history_with_memory(
 
         return build_llm_history(recent_messages)
 
-
-
-async def stream_message_generation(
-    session: AsyncSession,
-    user_id: UUID,
-    conversation_id: UUID,
-    data: MessageCreate,
-    llm_client,
-    redis_client: Redis,
-) -> AsyncIterator[RealtimeEvent]:
-    conversation = await get_conversation_for_user(
-        session=session,
-        conversation_id=conversation_id,
-        user_id=user_id,
-    )
-    if conversation is None:
-        raise ConversationNotFoundError("Conversation not found")
-
-    user_message = await create_user_message(
-        session=session,
-        conversation_id=conversation_id,
-        data=data,
-    )
-
-    yield RealtimeEvent(
-        type=RealtimeEventType.MESSAGE_STARTED,
-        conversation_id=conversation.id,
-        data={"user_message_id": str(user_message.id)},
-    )
-
-    history = await get_llm_history_with_memory(
-        session=session,
-        redis_client=redis_client,
-        conversation_id=conversation_id,
-        current_message=user_message,
-    )
-
-    if (
-        conversation.mode is ConversationMode.PROJECT_INTERVIEW
-        and conversation.learning_day is not None
-    ):
-        history = [
-            build_project_interview_instruction(
-                conversation.learning_day,
-            ),
-            *history,
-        ]
-    chunks: list[str] = []
-
-    try:
-        async for delta in llm_client.stream_generate(
-            history,
-            cache_scope=f"conversation:{conversation_id}",
-        ):
-            chunks.append(delta)
-
-            yield RealtimeEvent(
-                type=RealtimeEventType.MESSAGE_DELTA,
-                conversation_id=conversation.id,
-                data={"delta": delta},
-            )
-    except LLMCallError:
-        yield RealtimeEvent(
-            type=RealtimeEventType.MESSAGE_FAILED,
-            conversation_id=conversation.id,
-            data={"detail": "LLM stream request failed"},
-        )
-        return
-
-    assistant_content = "".join(chunks).strip()
-
-    if not assistant_content:
-        yield RealtimeEvent(
-            type=RealtimeEventType.MESSAGE_FAILED,
-            conversation_id=conversation.id,
-            data={"detail": "LLM returned empty stream"},
-        )
-        return
-    assistant_message = await create_assistant_message(
-    session=session,
-    conversation_id=conversation_id,
-    content=assistant_content,)
-
-    try:
-        await append_memory_message(
-            redis_client=redis_client,
-            conversation_id=conversation_id,
-            role=assistant_message.role,
-            content=assistant_message.content,
-        )
-    except RedisError:
-        logger.warning(
-            "Redis memory write failed after streamed assistant response",
-            exc_info=True,
-        )
-
-    yield RealtimeEvent(
-        type=RealtimeEventType.MESSAGE_COMPLETED,
-        conversation_id=conversation.id,
-        data={
-            "message_id": str(assistant_message.id),
-        },
-    )

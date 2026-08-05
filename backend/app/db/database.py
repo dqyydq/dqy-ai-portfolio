@@ -7,7 +7,7 @@ from app.core.config import get_settings
 from app.db.base import Base
 from app.models.user import User  # 只为触发模型注册
 from app.models.conversation import Conversation, Message
-from app.models.interview_review_task import InterviewReviewTask
+from app.models.email_verification import EmailVerificationCode
 
 
 settings = get_settings()
@@ -38,29 +38,14 @@ async def init_db() -> None:
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
         await connection.execute(text("""
-            DO $$
-            BEGIN
-                CREATE TYPE conversation_mode AS ENUM ('general', 'project_interview');
-            EXCEPTION WHEN duplicate_object THEN NULL;
-            END $$;
+            ALTER TABLE users
+            ADD COLUMN IF NOT EXISTS is_email_verified BOOLEAN NOT NULL DEFAULT FALSE
         """))
         await connection.execute(text("""
-            ALTER TABLE conversations
-            ADD COLUMN IF NOT EXISTS mode conversation_mode NOT NULL DEFAULT 'general'
+            ALTER TABLE users
+            ADD COLUMN IF NOT EXISTS deepseek_api_key_encrypted TEXT
         """))
         await connection.execute(text("""
-            ALTER TABLE conversations
-            ADD COLUMN IF NOT EXISTS learning_day INTEGER
-        """))
-        await connection.execute(text("""
-            ALTER TABLE interview_review_tasks
-            ADD COLUMN IF NOT EXISTS learning_day INTEGER
-        """))
-        await connection.execute(text("""
-            UPDATE interview_review_tasks SET learning_day = 6
-            WHERE learning_day IS NULL
-        """))
-        await connection.execute(text("""
-            ALTER TABLE interview_review_tasks
-            ALTER COLUMN learning_day SET NOT NULL
+            ALTER TABLE users
+            ADD COLUMN IF NOT EXISTS deepseek_api_key_hint VARCHAR(16)
         """))

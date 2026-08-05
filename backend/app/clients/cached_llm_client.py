@@ -2,7 +2,7 @@ import logging
 
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
-
+from collections.abc import AsyncIterator
 from app.services.llm_cache_service import (
     build_llm_cache_key,
     cache_llm_response,
@@ -62,3 +62,12 @@ class CachedLLMClient:
             )
 
         return response_text
+
+
+    async def stream_generate(
+        self,
+        messages: list[dict[str, str]],
+        cache_scope: str,
+    ) -> AsyncIterator[str]:
+        async for delta in self._llm_client.stream_generate(messages):
+            yield delta

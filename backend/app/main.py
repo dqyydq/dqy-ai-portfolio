@@ -2,7 +2,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from openai import AsyncOpenAI
-
+from app.api.interview_review import router as interview_review_router
 from app.api.auth import router as auth_router
 from app.api.conversation import router as conversations_router
 from app.api.health import router as health_router
@@ -11,7 +11,7 @@ from app.core.config import get_settings
 from app.db.database import close_database, init_db
 from app.db.redis import create_redis_client
 from app.clients.cached_llm_client import CachedLLMClient
-
+from app.api.realtime import router as realtime_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -58,3 +58,5 @@ app = FastAPI(
 app.include_router(health_router)
 app.include_router(auth_router)
 app.include_router(conversations_router)
+app.include_router(interview_review_router)
+app.include_router(realtime_router)

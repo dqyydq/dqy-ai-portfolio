@@ -6,11 +6,15 @@ from fastapi.testclient import TestClient
 from sqlalchemy import delete, select
 
 from app.api.deps import get_llm_client
+from app.api.deps import get_redis_client
 from app.clients.llm_client import LLMCallError
 from app.db.database import close_database, session_factory
+from app.db.redis import create_redis_client
 from app.main import app
 from app.models.conversation import Conversation, Message
 from app.models.user import User
+from app.services.rate_limit_service import build_rate_limit_key
+from redis.exceptions import ConnectionError as RedisConnectionError
 
 
 class FakeLLMClient:
@@ -26,6 +30,20 @@ class FakeLLMClient:
 class FailingLLMClient:
     async def generate(self, history, cache_scope: str | None = None):
         raise LLMCallError("LLM request failed")
+
+
+class CountingLLMClient:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    async def generate(self, history, cache_scope: str | None = None):
+        self.calls += 1
+        return "Mock assistant reply"
+
+
+class UnavailableRedis:
+    async def eval(self, *_args, **_kwargs):
+        raise RedisConnectionError("Redis is unavailable")
 
 
 @pytest.fixture(autouse=True)
@@ -65,6 +83,14 @@ async def _delete_test_data(email: str) -> None:
                 await session.commit()
     finally:
         await close_database()
+
+
+async def _delete_rate_limit_key(user_id: str) -> None:
+    redis_client = create_redis_client()
+    try:
+        await redis_client.delete(build_rate_limit_key(uuid.UUID(user_id)))
+    finally:
+        await redis_client.aclose()
 
 
 def test_create_conversation_for_current_user() -> None:
@@ -282,4 +308,96 @@ def test_message_generation_failure_returns_502_and_keeps_user_message() -> None
         assert [message["content"] for message in history.json()] == ["Keep this input"]
     finally:
         app.dependency_overrides.pop(get_llm_client, None)
+        asyncio.run(_delete_test_data(email))
+
+
+def test_message_generation_returns_429_before_calling_llm() -> None:
+    email = f"rate-limit-{uuid.uuid4()}@example.com"
+    payload = {
+        "email": email,
+        "user_name": f"user_{uuid.uuid4().hex[:12]}",
+        "password": "correct horse battery staple",
+    }
+    llm_client = CountingLLMClient()
+    app.dependency_overrides[get_llm_client] = lambda: llm_client
+    user_id = None
+
+    try:
+        with TestClient(app) as client:
+            registration = client.post("/auth/register", json=payload)
+            user_id = registration.json()["id"]
+            token = client.post(
+                "/auth/login",
+                json={"email": email, "password": payload["password"]},
+            ).json()["access_token"]
+            headers = {"Authorization": f"Bearer {token}"}
+            conversation_id = client.post(
+                "/conversations/",
+                json={"title": "Rate limit test"},
+                headers=headers,
+            ).json()["id"]
+
+            for number in range(10):
+                allowed = client.post(
+                    f"/conversations/{conversation_id}/messages",
+                    json={"content": f"message-{number}"},
+                    headers=headers,
+                )
+                assert allowed.status_code == 201
+
+            denied = client.post(
+                f"/conversations/{conversation_id}/messages",
+                json={"content": "blocked-message"},
+                headers=headers,
+            )
+
+        assert denied.status_code == 429
+        assert denied.headers["x-ratelimit-limit"] == "10"
+        assert denied.headers["x-ratelimit-remaining"] == "0"
+        assert int(denied.headers["retry-after"]) > 0
+        assert llm_client.calls == 10
+    finally:
+        app.dependency_overrides.pop(get_llm_client, None)
+        if user_id is not None:
+            asyncio.run(_delete_rate_limit_key(user_id))
+        asyncio.run(_delete_test_data(email))
+
+
+def test_message_generation_returns_503_when_rate_limit_redis_is_down() -> None:
+    email = f"rate-limit-down-{uuid.uuid4()}@example.com"
+    payload = {
+        "email": email,
+        "user_name": f"user_{uuid.uuid4().hex[:12]}",
+        "password": "correct horse battery staple",
+    }
+    llm_client = CountingLLMClient()
+    app.dependency_overrides[get_llm_client] = lambda: llm_client
+    app.dependency_overrides[get_redis_client] = lambda: UnavailableRedis()
+
+    try:
+        with TestClient(app, raise_server_exceptions=False) as client:
+            assert client.post("/auth/register", json=payload).status_code == 201
+            token = client.post(
+                "/auth/login",
+                json={"email": email, "password": payload["password"]},
+            ).json()["access_token"]
+            headers = {"Authorization": f"Bearer {token}"}
+            conversation_id = client.post(
+                "/conversations/",
+                json={"title": "Rate limit outage test"},
+                headers=headers,
+            ).json()["id"]
+
+            response = client.post(
+                f"/conversations/{conversation_id}/messages",
+                json={"content": "must not reach llm"},
+                headers=headers,
+            )
+
+        assert response.status_code == 503
+        assert response.json()["detail"] == "Rate limit service unavailable"
+        assert llm_client.calls == 0
+    finally:
+        app.dependency_overrides.pop(get_llm_client, None)
+        app.dependency_overrides.pop(get_redis_client, None)
         asyncio.run(_delete_test_data(email))

@@ -1,7 +1,7 @@
 import logging
 
 from openai import APIError
-
+from collections.abc import AsyncIterator
 
 logger = logging.getLogger(__name__)
 
@@ -35,3 +35,29 @@ class LLMClient:
         if not text:
             raise LLMResponseError("LLM returned empty output")
         return text
+
+
+
+    async def stream_generate(
+        self,
+        history: list[dict[str, str]],
+    ) -> AsyncIterator[str]:
+        try:
+            stream = await self._client.chat.completions.create(
+                model=self._settings.deepseek_model,
+                messages=history,
+                timeout=self._settings.llm_timeout_seconds,
+                stream=True,
+            )
+        except APIError as exc:
+            logger.warning(
+                "DeepSeek stream request failed (status=%s): %s",
+                getattr(exc, "status_code", None),
+                exc,
+            )
+            raise LLMCallError("LLM stream request failed") from exc
+
+        async for chunk in stream:
+            delta = chunk.choices[0].delta.content or ""
+            if delta:
+                yield delta

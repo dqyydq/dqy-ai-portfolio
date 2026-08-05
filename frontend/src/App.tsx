@@ -5,6 +5,7 @@ import remarkGfm from 'remark-gfm'
 import {
   ArrowUp,
   Bot,
+  ClipboardCheck,
   ChevronDown,
   Command,
   LoaderCircle,
@@ -16,7 +17,7 @@ import {
   Sparkles,
 } from 'lucide-react'
 import { ApiError, api } from './api/client'
-import type { Conversation, Message, User } from './types'
+import type { Conversation, Message, RealtimeEvent, User } from './types'
 import './App.css'
 
 const TOKEN_KEY = 'agentlab.access-token'
@@ -99,6 +100,8 @@ function App() {
   const [activeId, setActiveId] = useState<string | null>(null)
   const [draft, setDraft] = useState('')
   const [pendingUserMessage, setPendingUserMessage] = useState<string | null>(null)
+  const [streamedAssistantMessage, setStreamedAssistantMessage] = useState('')
+  const [reviewTaskId, setReviewTaskId] = useState<string | null>(null)
   const [sidebarOpen, setSidebarOpen] = useState(
     () => !window.matchMedia('(max-width: 40rem)').matches,
   )
@@ -133,6 +136,48 @@ function App() {
     [activeId, conversationsQuery.data],
   )
 
+  const reviewQuery = useQuery({
+    queryKey: ['interview-review', token, reviewTaskId],
+    queryFn: () => api.getInterviewReview(token, reviewTaskId!),
+    enabled: Boolean(token && reviewTaskId),
+    refetchInterval: (query) => query.state.data?.status === 'queued' || query.state.data?.status === 'running' ? 2000 : false,
+  })
+
+  useEffect(() => {
+    if (!token) return
+    let closed = false
+    let reconnectTimer: number | undefined
+    let attempts = 0
+    let socket: WebSocket | null = null
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const connect = () => {
+      socket = new WebSocket(`${protocol}//${window.location.host}/ws/events?token=${encodeURIComponent(token)}`)
+      socket.onopen = () => { attempts = 0 }
+      socket.onmessage = (message) => {
+        const event = JSON.parse(message.data) as RealtimeEvent
+        if (event.type.startsWith('review.') && event.task_id === reviewTaskId) {
+          void queryClient.invalidateQueries({ queryKey: ['interview-review', token, reviewTaskId] })
+        }
+        if (event.type === 'message.completed' && event.conversation_id) {
+          void queryClient.invalidateQueries({ queryKey: ['messages', token, event.conversation_id] })
+        }
+      }
+      socket.onclose = () => {
+        if (!closed) {
+          const delay = Math.min(1000 * 2 ** attempts, 8000)
+          attempts += 1
+          reconnectTimer = window.setTimeout(connect, delay)
+        }
+      }
+    }
+    connect()
+    return () => {
+      closed = true
+      if (reconnectTimer) window.clearTimeout(reconnectTimer)
+      socket?.close()
+    }
+  }, [queryClient, reviewTaskId, token])
+
   const sendMutation = useMutation({
     mutationFn: async ({ conversationId, content }: { conversationId: string | null; content: string }) => {
       let targetId = conversationId
@@ -142,14 +187,19 @@ function App() {
         setActiveId(targetId)
         await queryClient.invalidateQueries({ queryKey: ['conversations', token] })
       }
-      const message = await api.sendMessage(token, targetId, content)
-      return { message, conversationId: targetId }
+      await api.streamMessage(token, targetId, content, (event) => {
+        if (event.type === 'message.delta') {
+          setStreamedAssistantMessage((current) => current + String(event.data.delta ?? ''))
+        }
+      })
+      return { conversationId: targetId }
     },
     onSuccess: async ({ conversationId }) => {
       setActiveId(conversationId)
       await queryClient.invalidateQueries({ queryKey: ['conversations', token] })
       await queryClient.invalidateQueries({ queryKey: ['messages', token, conversationId] })
       setPendingUserMessage(null)
+      setStreamedAssistantMessage('')
       textareaRef.current?.focus()
     },
     onError: async (_error, { conversationId }) => {
@@ -157,6 +207,7 @@ function App() {
         await queryClient.invalidateQueries({ queryKey: ['messages', token, conversationId] })
       }
       setPendingUserMessage(null)
+      setStreamedAssistantMessage('')
     },
   })
 
@@ -172,9 +223,35 @@ function App() {
     },
   })
 
+  const createInterviewConversationMutation = useMutation({
+    mutationFn: () => api.createConversation(token, 'Project interview practice', 'project_interview', 6),
+    onSuccess: async (conversation) => {
+      setActiveId(conversation.id)
+      setReviewTaskId(null)
+      await queryClient.invalidateQueries({ queryKey: ['conversations', token] })
+      textareaRef.current?.focus()
+    },
+  })
+
+  const updateLearningDayMutation = useMutation({
+    mutationFn: (learningDay: number) => api.updateLearningDay(token, activeId!, learningDay),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['conversations', token] })
+    },
+  })
+
+  const createReviewMutation = useMutation({
+    mutationFn: () => api.createInterviewReview(token, activeId!),
+    onSuccess: (review) => setReviewTaskId(review.id),
+  })
+
   const startNewConversation = () => {
     if (createConversationMutation.isPending) return
     createConversationMutation.mutate()
+  }
+
+  const startInterviewConversation = () => {
+    if (!createInterviewConversationMutation.isPending) createInterviewConversationMutation.mutate()
   }
 
   const submitDraft = (event: FormEvent<HTMLFormElement>) => {
@@ -219,8 +296,11 @@ function App() {
           </button>
           <button className="icon-button" type="button" aria-label="Collapse sidebar" onClick={() => setSidebarOpen(false)}><PanelLeftClose size={18} /></button>
         </header>
-        <button className="new-thread" type="button" onClick={startNewConversation} disabled={createConversationMutation.isPending}>
+          <button className="new-thread" type="button" onClick={startNewConversation} disabled={createConversationMutation.isPending}>
           <Plus size={17} /> {createConversationMutation.isPending ? 'Creating…' : 'New thread'}
+          </button>
+        <button className="interview-thread" type="button" onClick={startInterviewConversation} disabled={createInterviewConversationMutation.isPending}>
+          <ClipboardCheck size={17} /> {createInterviewConversationMutation.isPending ? 'Setting up' : 'Project interview'}
         </button>
         <div className="sidebar-section">
           <p>CONVERSATIONS</p>
@@ -228,7 +308,7 @@ function App() {
             {conversationsQuery.isLoading && <span className="sidebar-note">Loading threads…</span>}
             {conversationsQuery.data?.map((conversation: Conversation) => (
               <button key={conversation.id} type="button" className={conversation.id === activeId ? 'conversation-row conversation-row--active' : 'conversation-row'} onClick={() => setActiveId(conversation.id)}>
-                <MessageSquare size={15} /><span>{conversation.title}</span>
+                {conversation.mode === 'project_interview' ? <ClipboardCheck size={15} /> : <MessageSquare size={15} />}<span>{conversation.title}</span>
               </button>
             ))}
             {!conversationsQuery.isLoading && !conversationsQuery.data?.length && <span className="sidebar-note">Your first thread starts here.</span>}
@@ -249,6 +329,30 @@ function App() {
         </header>
 
         <section className="message-rail" aria-live="polite">
+          {activeConversation?.mode === 'project_interview' && (
+            <section className="interview-panel" aria-label="Project interview controls">
+              <div>
+                <p className="message-label">PROJECT INTERVIEW</p>
+                <strong>Day {activeConversation.learning_day} practice room</strong>
+                <span>Answer naturally, then request an evidence-based review.</span>
+              </div>
+              <div className="interview-actions">
+                <label>Day <select value={activeConversation.learning_day ?? 6} onChange={(event) => updateLearningDayMutation.mutate(Number(event.target.value))} disabled={updateLearningDayMutation.isPending}>
+                  {[1, 2, 3, 4, 5, 6, 7].map((day) => <option key={day} value={day}>Day {day}</option>)}
+                </select></label>
+                <button type="button" onClick={() => createReviewMutation.mutate()} disabled={createReviewMutation.isPending || !activeId}>
+                  <ClipboardCheck size={15} /> {createReviewMutation.isPending ? 'Queueing' : 'Review this session'}
+                </button>
+              </div>
+              {reviewQuery.data && (
+                <div className={`review-result review-result--${reviewQuery.data.status}`}>
+                  <p className="message-label">REVIEW · {reviewQuery.data.status.toUpperCase()}</p>
+                  {reviewQuery.data.result ? <ReactMarkdown remarkPlugins={[remarkGfm]}>{reviewQuery.data.result}</ReactMarkdown> : <p>{reviewQuery.data.status === 'failed' ? reviewQuery.data.error_message : 'Your review is being prepared by the worker.'}</p>}
+                </div>
+              )}
+              {createReviewMutation.error instanceof Error && <p className="composer-error">{createReviewMutation.error.message}</p>}
+            </section>
+          )}
           {!activeId && (
             <div className="welcome-state">
               <div className="welcome-kicker"><Sparkles size={16} /> DAY 03 COMPLETE</div>
@@ -281,7 +385,9 @@ function App() {
           {sendMutation.isPending && (
             <article className="message message--assistant message--pending">
               <div className="message-label">AGENT</div>
-              <div className="thinking"><span /><span /><span /> Thinking through it</div>
+              {streamedAssistantMessage
+                ? <div className="message-content"><ReactMarkdown remarkPlugins={[remarkGfm]}>{streamedAssistantMessage}</ReactMarkdown></div>
+                : <div className="thinking"><span /><span /><span /> Thinking through it</div>}
             </article>
           )}
         </section>

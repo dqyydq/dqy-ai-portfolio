@@ -8,6 +8,11 @@ export default defineConfig({
     proxy: {
       '/auth': 'http://127.0.0.1:8000',
       '/conversations': 'http://127.0.0.1:8000',
+      '/interview-reviews': 'http://127.0.0.1:8000',
+      '/ws': {
+        target: 'ws://127.0.0.1:8000',
+        ws: true,
+      },
       '/health': 'http://127.0.0.1:8000',
     },
   },

@@ -1,5 +1,6 @@
 import asyncio
 import hashlib
+import os
 import secrets
 import smtplib
 from datetime import datetime, timedelta, timezone
@@ -22,23 +23,37 @@ def _hash_code(code: str) -> str:
 
 def _send_message(recipient: str, code: str) -> None:
     settings = get_settings()
-    if not all([settings.smtp_host, settings.smtp_username, settings.smtp_password, settings.smtp_from_email]):
-        raise RuntimeError("SMTP is not configured")
+    # Render injects secrets through the process environment. Prefer that source
+    # here so email delivery remains independent of any cached settings instance.
+    smtp_host = os.getenv("SMTP_HOST") or settings.smtp_host
+    smtp_username = os.getenv("SMTP_USERNAME") or settings.smtp_username
+    smtp_password = os.getenv("SMTP_PASSWORD") or settings.smtp_password
+    smtp_from_email = os.getenv("SMTP_FROM_EMAIL") or settings.smtp_from_email
+    smtp_port = int(os.getenv("SMTP_PORT") or settings.smtp_port)
+    smtp_use_ssl = (os.getenv("SMTP_USE_SSL") or str(settings.smtp_use_ssl)).lower() in {"1", "true", "yes", "on"}
+    missing = [name for name, value in {
+        "SMTP_HOST": smtp_host,
+        "SMTP_USERNAME": smtp_username,
+        "SMTP_PASSWORD": smtp_password,
+        "SMTP_FROM_EMAIL": smtp_from_email,
+    }.items() if not value]
+    if missing:
+        raise RuntimeError(f"SMTP is not configured; missing {', '.join(missing)}")
     message = EmailMessage()
     message["Subject"] = "AI Assistant email verification"
-    message["From"] = settings.smtp_from_email
+    message["From"] = smtp_from_email
     message["To"] = recipient
     message.set_content(
         f"Your verification code is {code}. It expires in {VERIFICATION_CODE_TTL_MINUTES} minutes."
     )
-    if settings.smtp_use_ssl:
-        with smtplib.SMTP_SSL(settings.smtp_host, settings.smtp_port, timeout=15) as client:
-            client.login(settings.smtp_username, settings.smtp_password)
+    if smtp_use_ssl:
+        with smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=15) as client:
+            client.login(smtp_username, smtp_password)
             client.send_message(message)
     else:
-        with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=15) as client:
+        with smtplib.SMTP(smtp_host, smtp_port, timeout=15) as client:
             client.starttls()
-            client.login(settings.smtp_username, settings.smtp_password)
+            client.login(smtp_username, smtp_password)
             client.send_message(message)
 
 

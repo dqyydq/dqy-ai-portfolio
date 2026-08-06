@@ -31,3 +31,25 @@ The hero landscape, capability card row, and assistant panel were inspected as f
 ## Final Result
 
 final result: passed
+
+---
+
+# Private AI Studio Redesign QA
+
+## Evidence
+
+- Source problem state: `C:/Users/qzwddy/AppData/Local/Temp/codex-clipboard-1f97e1d1-38fe-446d-9568-7af63f900228.png`
+- Implementation: commit `6f18d0e`, production frontend build completed successfully.
+- Intended viewport checks: desktop plus 320px, 375px, 414px, and 768px responsive rules are present in `frontend/src/App.css`.
+- Core interactions retained in the implementation: new conversation, conversation selection, API-key save, prompt suggestions, message sending, and sign-out.
+
+## Findings
+
+- [P2] Online authenticated visual capture pending.
+  Evidence: the browser session timed out while Render was rebuilding and could not safely capture the signed-in production route.
+  Impact: the exact deployed, authenticated visual state has not yet been independently captured.
+  Fix: refresh the frontend after Render finishes deployment and capture the assistant screen once.
+
+## Final Result
+
+final result: blocked

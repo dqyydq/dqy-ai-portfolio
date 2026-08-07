@@ -171,3 +171,11 @@
 .studio-home { display: inline-flex; align-items: center; gap: 7px; margin: 0 7px 16px; padding: 7px 0; background: transparent; color: var(--studio-mist); font-size: 12px; }
 .studio-home:hover { color: var(--studio-paper-raised); }
 .studio-thinking { color: var(--studio-muted); font-style: italic; }
+
+/* The conversation index and transcript remain independently scrollable. */
+.studio-shell { height: 100dvh; min-height: 0; overflow: hidden; }
+.studio-rail { min-height: 0; overflow: hidden; }
+.studio-rail > div:first-child { display: flex; min-height: 0; flex: 1; flex-direction: column; }
+.studio-conversations { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding-right: 4px; }
+.studio-main { height: 100dvh; min-height: 0; }
+.studio-thread { overscroll-behavior: contain; }

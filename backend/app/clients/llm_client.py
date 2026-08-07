@@ -48,6 +48,7 @@ class LLMClient:
                 messages=history,
                 timeout=self._settings.llm_timeout_seconds,
                 stream=True,
+                extra_body={"thinking": {"type": "disabled"}},
             )
         except APIError as exc:
             logger.warning(

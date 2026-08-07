@@ -17,6 +17,7 @@ from app.services.memory_service import (
     append_memory_message,
     get_memory_messages,
 )
+from app.services.portfolio_context import PORTFOLIO_SYSTEM_PROMPT
 
 
 class ConversationNotFoundError(Exception):
@@ -119,10 +120,7 @@ async def list_messages(
 
 
 def build_llm_history(messages: list[Message]) -> list[dict]:
-    return [
-        {"role": message.role.value, "content": message.content}
-        for message in messages
-    ]
+    return [{"role": message.role.value, "content": message.content} for message in messages]
 
 
 def build_project_interview_instruction(learning_day: int) -> dict[str, str]:
@@ -172,7 +170,7 @@ async def send_message_and_generate(
             current_message=user_message,
         )
 
-    assistant_content = await llm_client.generate(history)
+    assistant_content = await llm_client.generate([{"role": "system", "content": PORTFOLIO_SYSTEM_PROMPT}, *history])
 
     assistant_message = await create_assistant_message(
         session=session,
@@ -219,7 +217,7 @@ async def stream_message_generation(
 
     chunks: list[str] = []
     try:
-        async for delta in llm_client.stream_generate(history):
+        async for delta in llm_client.stream_generate([{"role": "system", "content": PORTFOLIO_SYSTEM_PROMPT}, *history]):
             chunks.append(delta)
             yield {"type": "message.delta", "conversation_id": str(conversation.id), "data": {"delta": delta}}
     except LLMCallError:

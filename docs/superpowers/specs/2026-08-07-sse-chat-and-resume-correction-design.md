@@ -4,6 +4,13 @@
 
 Keep the current private research studio visual language while restoring the original conversation system's SSE streaming behaviour. The product will not use WebSocket, learning workflows, or interview-review workflows. Public portfolio claims must be grounded exclusively in the supplied resume.
 
+## Recruiter-first experience
+
+- The public homepage is the primary experience: it must communicate role target, internship evidence, project ownership, and credible technical contribution before asking the visitor to log in.
+- An interviewer or HR visitor must be able to assess the candidate without using the AI assistant. The assistant is an optional, authenticated deep-dive rather than a gate in the evaluation flow.
+- Portfolio copy favours concise, verifiable statements of responsibility, mechanism, and outcome. It does not inflate responsibilities into unsupported backend, architecture, or management claims.
+- GitHub and a clear contact action remain immediately discoverable; the phone number remains private.
+
 ## Chat behaviour
 
 - Restore `POST /conversations/{id}/messages/stream` using `text/event-stream`.

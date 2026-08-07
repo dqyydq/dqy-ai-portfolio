@@ -1,0 +1,81 @@
+/* Hallmark refinement: quiet welcome state, no oversized empty-state slogan. */
+.studio-welcome {
+  display: grid;
+  justify-items: start;
+  align-content: center;
+  min-height: 100%;
+  max-width: 620px;
+  margin: auto;
+  padding-bottom: 8vh;
+}
+
+.studio-welcome-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--studio-ink);
+  font-family: var(--studio-font-display);
+  font-size: 25px;
+  font-weight: 700;
+  letter-spacing: .04em;
+}
+
+.studio-welcome-label svg { color: var(--studio-sage); }
+
+.studio-welcome > span {
+  max-width: 34ch;
+  margin-top: 9px;
+  color: var(--studio-muted);
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.studio-welcome .studio-suggestions {
+  display: grid;
+  gap: 9px;
+  width: min(100%, 520px);
+  margin-top: 28px;
+}
+
+.studio-suggestions button {
+  display: flex;
+  align-items: center;
+  min-height: 48px;
+  padding: 0 16px;
+  border: 1px solid var(--studio-line);
+  border-radius: 7px;
+  background: var(--studio-paper-raised);
+  color: var(--studio-text);
+  text-align: left;
+  font-size: 13px;
+  transition: border .18s ease, transform .18s ease, background .18s ease;
+}
+
+.studio-suggestions button::before {
+  content: "↗";
+  margin-right: 11px;
+  color: var(--studio-accent);
+  font-size: 15px;
+}
+
+.studio-suggestions button:hover {
+  border-color: var(--studio-accent);
+  background: var(--studio-mist);
+  transform: translateX(3px);
+}
+
+.studio-suggestions button:focus-visible {
+  outline: 2px solid var(--studio-accent);
+  outline-offset: 3px;
+}
+
+@media (max-width: 414px) {
+  .studio-welcome { padding-bottom: 4vh; }
+  .studio-welcome-label { font-size: 22px; }
+  .studio-welcome .studio-suggestions { margin-top: 22px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .studio-suggestions button { transition: none; }
+}

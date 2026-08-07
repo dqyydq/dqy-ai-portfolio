@@ -196,6 +196,49 @@ async def send_message_and_generate(
 
     return assistant_message
 
+
+async def stream_message_generation(
+    session: AsyncSession,
+    user_id: UUID,
+    conversation_id: UUID,
+    data: MessageCreate,
+    llm_client,
+    redis_client: Redis | None,
+) -> AsyncIterator[dict[str, object]]:
+    conversation = await get_conversation_for_user(session, conversation_id, user_id)
+    if conversation is None:
+        raise ConversationNotFoundError("Conversation not found")
+
+    user_message = await create_user_message(session, conversation_id, data)
+    yield {"type": "message.started", "conversation_id": str(conversation.id), "data": {"user_message_id": str(user_message.id)}}
+
+    if redis_client is None:
+        history = build_llm_history(await list_recent_messages(session, conversation_id, MEMORY_WINDOW_SIZE))
+    else:
+        history = await get_llm_history_with_memory(session, redis_client, conversation_id, user_message)
+
+    chunks: list[str] = []
+    try:
+        async for delta in llm_client.stream_generate(history):
+            chunks.append(delta)
+            yield {"type": "message.delta", "conversation_id": str(conversation.id), "data": {"delta": delta}}
+    except LLMCallError:
+        yield {"type": "message.failed", "conversation_id": str(conversation.id), "data": {"detail": "模型响应超时或请求失败，请稍后重试。"}}
+        return
+
+    assistant_content = "".join(chunks).strip()
+    if not assistant_content:
+        yield {"type": "message.failed", "conversation_id": str(conversation.id), "data": {"detail": "模型没有返回可显示的内容。"}}
+        return
+
+    assistant_message = await create_assistant_message(session, conversation_id, assistant_content)
+    if redis_client is not None:
+        try:
+            await append_memory_message(redis_client, conversation_id, assistant_message.role, assistant_message.content)
+        except RedisError:
+            logger.warning("Redis memory write failed after streamed assistant response", exc_info=True)
+    yield {"type": "message.completed", "conversation_id": str(conversation.id), "data": {"message_id": str(assistant_message.id)}}
+
 async def list_recent_messages(
         session:AsyncSession,
         conversation_id:UUID,

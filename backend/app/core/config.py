@@ -19,9 +19,9 @@ class Settings(BaseSettings):
     frontend_origins: str = "http://localhost:5173"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
-    deepseek_base_url: str = "https://api.deepseek.com/v1"
+    deepseek_base_url: str = "https://api.deepseek.com"
     deepseek_model: str = "deepseek-v4-flash"
-    llm_timeout_seconds: float = 30
+    llm_timeout_seconds: float = 60
 
     @property
     def cors_origins(self) -> list[str]:

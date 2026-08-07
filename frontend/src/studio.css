@@ -167,3 +167,7 @@
 .studio-markdown td { padding: .5em .62em; border: 1px solid var(--studio-line); text-align: left; }
 .studio-markdown th { background: var(--studio-mist); color: var(--studio-ink); }
 .studio-markdown hr { border: 0; border-top: 1px solid var(--studio-line); margin: 1.1em 0; }
+
+.studio-home { display: inline-flex; align-items: center; gap: 7px; margin: 0 7px 16px; padding: 7px 0; background: transparent; color: var(--studio-mist); font-size: 12px; }
+.studio-home:hover { color: var(--studio-paper-raised); }
+.studio-thinking { color: var(--studio-muted); font-style: italic; }

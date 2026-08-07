@@ -29,3 +29,6 @@ export interface Message {
   created_at: string
 }
 
+export type StreamEventType = 'message.started' | 'message.delta' | 'message.completed' | 'message.failed'
+export interface StreamEvent { type: StreamEventType; conversation_id: string; data: Record<string, unknown> }
+

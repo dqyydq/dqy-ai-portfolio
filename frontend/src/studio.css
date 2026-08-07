@@ -179,3 +179,11 @@
 .studio-conversations { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding-right: 4px; }
 .studio-main { height: 100dvh; min-height: 0; }
 .studio-thread { overscroll-behavior: contain; }
+.studio-conversation-row { display: grid; grid-template-columns: minmax(0, 1fr) 28px; align-items: center; border-radius: 5px; }
+.studio-conversation-row > button:first-child { width: 100%; }
+.studio-conversation-row.is-active { background: var(--studio-accent); }
+.studio-conversation-row.is-active > button:first-child { background: transparent; color: var(--studio-paper-raised); }
+.studio-delete { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 4px; background: transparent; color: var(--studio-mist); opacity: 0; }
+.studio-conversation-row:hover .studio-delete, .studio-conversation-row:focus-within .studio-delete { opacity: 1; }
+.studio-delete:hover { background: var(--studio-ink-soft); color: var(--studio-paper-raised); }
+.studio-delete:disabled { cursor: not-allowed; opacity: .35; }

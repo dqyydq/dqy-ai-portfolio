@@ -3,7 +3,7 @@ from app.core.security import get_password_hash,verify_password
 from app.api.conversation_schemas import ConversationCreate
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from app.api.conversation_schemas import MessageCreate
 from app.models.conversation import MessageRole
 import logging
@@ -49,6 +49,20 @@ async def list_conversations(
         .order_by(Conversation.created_at.desc()),
     )
     return list(result.scalars().all())
+
+
+async def delete_conversation(
+    session: AsyncSession,
+    conversation_id: UUID,
+    user_id: UUID,
+) -> bool:
+    conversation = await get_conversation_for_user(session, conversation_id, user_id)
+    if conversation is None:
+        return False
+    await session.execute(delete(Message).where(Message.conversation_id == conversation_id))
+    await session.delete(conversation)
+    await session.commit()
+    return True
 
 
 

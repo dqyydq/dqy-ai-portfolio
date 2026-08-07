@@ -32,6 +32,7 @@ Keep the current private research studio visual language while restoring the ori
 
 - Add a visible return-to-home button to the authenticated assistant studio. It clears only the current in-app view state and returns to the public portfolio; it does not sign the user out.
 - Keep the existing research-studio layout and the current Markdown visual treatment. This work changes interaction, performance, navigation, and factual content rather than redesigning the interface.
+- Users may delete only their own conversations. The UI asks for confirmation, then selects the next remaining conversation or the welcome state. Deletion removes the conversation and its messages.
 
 ## Verification
 

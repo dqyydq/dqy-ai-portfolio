@@ -14,7 +14,7 @@ from app.api.rate_limit import enforce_message_rate_limit
 from app.clients.llm_client import LLMCallError, LLMClient, LLMResponseError
 from app.db.database import get_session
 from app.models.user import User
-from app.services.conversation_service import ConversationNotFoundError, create_conversation, get_conversation_for_user, list_conversations, list_messages, send_message_and_generate, stream_message_generation
+from app.services.conversation_service import ConversationNotFoundError, create_conversation, delete_conversation, get_conversation_for_user, list_conversations, list_messages, send_message_and_generate, stream_message_generation
 from app.services.rate_limit_service import RateLimitResult
 
 router = APIRouter(prefix="/conversations", tags=["conversations"])
@@ -36,6 +36,17 @@ async def read_messages(conversation_id: UUID, current_user: Annotated[User, Dep
     if conversation is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found")
     return await list_messages(session, conversation.id)
+
+
+@router.delete("/{conversation_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_conversation(
+    conversation_id: UUID,
+    current_user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> None:
+    deleted = await delete_conversation(session, conversation_id, current_user.id)
+    if not deleted:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found")
 
 
 @router.post("/{conversation_id}/messages", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)

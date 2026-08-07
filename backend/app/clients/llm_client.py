@@ -50,6 +50,10 @@ class LLMClient:
                 stream=True,
                 extra_body={"thinking": {"type": "disabled"}},
             )
+            async for chunk in stream:
+                delta = chunk.choices[0].delta.content or ""
+                if delta:
+                    yield delta
         except APIError as exc:
             logger.warning(
                 "DeepSeek stream request failed (status=%s): %s",
@@ -57,8 +61,3 @@ class LLMClient:
                 exc,
             )
             raise LLMCallError("LLM stream request failed") from exc
-
-        async for chunk in stream:
-            delta = chunk.choices[0].delta.content or ""
-            if delta:
-                yield delta

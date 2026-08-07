@@ -1,3 +1,5 @@
+import asyncio
+
 from app.models.conversation import Conversation,Message
 from app.core.security import get_password_hash,verify_password
 from app.api.conversation_schemas import ConversationCreate
@@ -230,11 +232,22 @@ async def stream_message_generation(
         history = await get_llm_history_with_memory(session, redis_client, conversation_id, user_message)
 
     chunks: list[str] = []
+    stream = llm_client.stream_generate([{"role": "system", "content": PORTFOLIO_SYSTEM_PROMPT}, *history]).__aiter__()
     try:
-        async for delta in llm_client.stream_generate([{"role": "system", "content": PORTFOLIO_SYSTEM_PROMPT}, *history]):
+        first_delta = await asyncio.wait_for(anext(stream), timeout=8)
+        chunks.append(first_delta)
+        yield {"type": "message.delta", "conversation_id": str(conversation.id), "data": {"delta": first_delta}}
+        while True:
+            try:
+                delta = await asyncio.wait_for(anext(stream), timeout=45)
+            except StopAsyncIteration:
+                break
             chunks.append(delta)
             yield {"type": "message.delta", "conversation_id": str(conversation.id), "data": {"delta": delta}}
-    except LLMCallError:
+    except asyncio.TimeoutError:
+        yield {"type": "message.failed", "conversation_id": str(conversation.id), "data": {"detail": "模型在规定时间内没有返回内容，请检查 API Key 配额后重试。"}}
+        return
+    except (LLMCallError, StopAsyncIteration):
         yield {"type": "message.failed", "conversation_id": str(conversation.id), "data": {"detail": "模型响应超时或请求失败，请稍后重试。"}}
         return
 

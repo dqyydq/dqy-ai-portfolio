@@ -79,3 +79,85 @@
 @media (prefers-reduced-motion: reduce) {
   .studio-suggestions button { transition: none; }
 }
+
+/* Rich assistant replies: Markdown is content, but should still feel native to the studio. */
+.studio-markdown {
+  min-width: 0;
+  padding: 14px 17px;
+  border-radius: 4px 15px 15px 15px;
+  background: var(--studio-paper-raised);
+  color: var(--studio-text);
+  box-shadow: 0 2px 9px rgba(17, 42, 65, .06);
+  font-size: 15px;
+  line-height: 1.75;
+  overflow-wrap: anywhere;
+}
+
+.studio-markdown > :first-child { margin-top: 0; }
+.studio-markdown > :last-child { margin-bottom: 0; }
+
+.studio-markdown h1,
+.studio-markdown h2,
+.studio-markdown h3,
+.studio-markdown h4 {
+  margin: 1.15em 0 .45em;
+  color: var(--studio-ink);
+  font-family: var(--studio-font-display);
+  line-height: 1.3;
+}
+
+.studio-markdown h1 { font-size: 1.45em; }
+.studio-markdown h2 { font-size: 1.24em; }
+.studio-markdown h3 { font-size: 1.08em; }
+
+.studio-markdown p {
+  margin: 0 0 .8em;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.studio-markdown ul,
+.studio-markdown ol { margin: .55em 0 .85em; padding-left: 1.35em; }
+.studio-markdown li + li { margin-top: .3em; }
+
+.studio-markdown a {
+  color: var(--studio-accent);
+  text-decoration-color: var(--studio-sage);
+  text-underline-offset: 3px;
+}
+
+.studio-markdown :not(pre) > code {
+  padding: .12em .38em;
+  border-radius: 4px;
+  background: var(--studio-mist);
+  color: var(--studio-ink);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: .9em;
+}
+
+.studio-markdown pre {
+  margin: .85em 0;
+  padding: 13px 15px;
+  overflow-x: auto;
+  border-radius: 8px;
+  background: var(--studio-ink);
+  color: var(--studio-paper-raised);
+  font-size: .88em;
+  line-height: 1.65;
+}
+
+.studio-markdown pre code { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+
+.studio-markdown blockquote {
+  margin: .9em 0;
+  padding: .1em 0 .1em 1em;
+  border-left: 3px solid var(--studio-sage);
+  color: var(--studio-muted);
+}
+
+.studio-markdown table { width: 100%; margin: .9em 0; border-collapse: collapse; font-size: .92em; }
+.studio-markdown th,
+.studio-markdown td { padding: .5em .62em; border: 1px solid var(--studio-line); text-align: left; }
+.studio-markdown th { background: var(--studio-mist); color: var(--studio-ink); }
+.studio-markdown hr { border: 0; border-top: 1px solid var(--studio-line); margin: 1.1em 0; }
